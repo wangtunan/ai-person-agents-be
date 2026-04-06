@@ -1,22 +1,19 @@
 from fastapi import APIRouter
-from fastapi.responses import Response
-from app.services.vsix_service import download_vsix
+from fastapi.responses import StreamingResponse
+from app.services.vsix import vsix_stream_agent
 
 router = APIRouter()
 
-@router.post("")
-def download(payload: dict):
+@router.post("/stream")
+def get_vsix_stream(payload: dict):
     url = payload.get("url")
-    
-    if not url:
-        return { "error": "url is required" }
-    
-    result = download_vsix(url)
-
-    return Response(
-        content=result["content"],
-        media_type=result["content_type"],
+    print("get_vsix_stream", url)
+    return StreamingResponse(
+        vsix_stream_agent(url),
+        media_type="text/event-stream",
         headers={
-            "Content-Disposition": f"attachment; filename={result['filename']}"
-        }
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
