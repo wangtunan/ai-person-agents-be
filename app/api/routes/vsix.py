@@ -4,7 +4,7 @@ from app.services.vsix_service import download_vsix
 
 router = APIRouter()
 
-@router.post("/")
+@router.post("")
 def download(payload: dict):
     url = payload.get("url")
     
