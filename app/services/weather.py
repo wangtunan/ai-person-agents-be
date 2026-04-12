@@ -2,6 +2,7 @@ import json
 import os
 import requests
 
+from urllib.parse import unquote
 from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -13,6 +14,43 @@ client = OpenAI(
     base_url=os.getenv("OPENAI_BASE_URL"),
 )
 
+def get_city_from_text(text):
+    # url转码
+    text = unquote(text)
+    system_prompt = "You area a helpful assistant that can extract the city from the text."
+    user_prompt = f"""
+      User Input: {text}
+
+      Please return: 
+      {{"city": "city name"}}
+
+      Example:
+      1: {{ "city": "shanghai"}}
+      2: {{ "city": "beijing"}}
+
+      Rules: 
+      1. Only return the city name
+      2. If the city name is not found, return {{ "city": null }}
+      3. Do not return return province/country/etc.
+    """
+
+    response = client.chat.completions.create(
+        model=os.getenv("OPENAI_MODEL"),
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+    )
+
+    content = response.choices[0].message.content
+    data = json.loads(content)
+    city = data.get("city")
+
+    if isinstance(city, str) and city.strip():
+        return city.strip()
+    return None
+
 def get_weather(city: str):
     url = "https://api.openweathermap.org/data/2.5/forecast"
     params = {
@@ -21,7 +59,6 @@ def get_weather(city: str):
         "units": "metric",
         "lang": "zh_cn"
     }
-    print("city", city)
 
     res = requests.get(url, params=params)
     res.raise_for_status()
@@ -112,28 +149,22 @@ def generate_advice_stream(city: str, forecast: list):
             yield delta.content
 
 
-def get_weather_agent_stream(city: str):
-    """SSE: first event carries forecast JSON, then delta events (Markdown text), then done."""
+def get_weather_agent_stream(text: str):
+    city = get_city_from_text(text)
+    if not city:
+        yield f"data: {json.dumps({'type': 'error', 'text': 'City not found'}, ensure_ascii=False)}\n\n"
+        return
+
     forecast = get_weather(city)
     for piece in generate_advice_stream(city, forecast):
         yield f"data: {json.dumps({'type': 'delta', 'text': piece}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
 
-def get_weather_agent(city: str):
-    forecast = get_weather(city)
-    advice = generate_advice(city,forecast)
-    
-    return {
-        "city": city,
-        "forecast": forecast,
-        "advice": advice
-    }
-
-
 if __name__ == "__main__":
-    city = "Shanghai"
-    for raw in get_weather_agent_stream(city):
+    input_text = input("Enter text to get city: ")
+    
+    for raw in get_weather_agent_stream(input_text):
         line = raw.strip()
         if not line.startswith("data:"):
             continue
