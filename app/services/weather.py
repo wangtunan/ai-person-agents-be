@@ -17,21 +17,25 @@ client = OpenAI(
 def get_city_from_text(text):
     # url转码
     text = unquote(text)
-    system_prompt = "You area a helpful assistant that can extract the city from the text."
+    system_prompt = "You area a helpful weather assistant that can extract the city from the text."
     user_prompt = f"""
       User Input: {text}
 
       Please return: 
       {{"city": "city name"}}
 
-      Example:
+      Rules: 
+      1. Only return the city PinYin
+      2. If the city name is not found, return {{ "city": null }}
+      3. Do not return return province/country/etc.
+
+      Return Truth Example:
       1: {{ "city": "shanghai"}}
       2: {{ "city": "beijing"}}
 
-      Rules: 
-      1. Only return the city name
-      2. If the city name is not found, return {{ "city": null }}
-      3. Do not return return province/country/etc.
+      Return False Example:
+      1: {{ "city": "上海"}}
+      2: {{ "city": "成都"}}
     """
 
     response = client.chat.completions.create(
